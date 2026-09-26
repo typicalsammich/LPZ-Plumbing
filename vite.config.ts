@@ -6,14 +6,19 @@ import { sites } from "./build/sites-vite-plugin";
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   "00000000-0000-4000-8000-000000000000";
 
-
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 const managedLinux = readExecutionProfile() === "managed-linux";
 
+// D1 and R2 were previously supplied by the Codex/OpenAI hosting config.
+// They are disabled for the normal Vercel build.
+const d1: string | false = false;
+const r2: string | false = false;
+
 const localBindingConfig = {
   main: "vinext/server/fetch-handler",
   compatibility_flags: ["nodejs_compat"],
+
   d1_databases: d1
     ? [
         {
@@ -23,6 +28,7 @@ const localBindingConfig = {
         },
       ]
     : [],
+
   r2_buckets: r2
     ? [
         {
@@ -38,8 +44,7 @@ export default defineConfig(async () => {
   process.env.CLOUDFLARE_CF_FETCH_ENABLED ??= "false";
   process.env.WRANGLER_SEND_METRICS ??= "false";
 
-  // Keep Wrangler and Miniflare state project-local. These are non-secret tool
-  // settings; application environment belongs in ignored `.env*` files.
+  // Keep Wrangler and Miniflare state project-local.
   process.env.WRANGLER_WRITE_LOGS ??= "false";
   process.env.WRANGLER_LOG_PATH ??= ".wrangler/logs";
   process.env.WRANGLER_REGISTRY_PATH ??= ".wrangler/dev-registry";
@@ -50,14 +55,35 @@ export default defineConfig(async () => {
 
   return {
     server: {
-      ...(managedLinux ? { host: "0.0.0.0", allowedHosts: ["terminal.local"] } : {}),
-      ...(isCodexSeatbeltSandbox ? { watch: { useFsEvents: false, usePolling: true } } : {}),
+      ...(managedLinux
+        ? {
+            host: "0.0.0.0",
+            allowedHosts: ["terminal.local"],
+          }
+        : {}),
+
+      ...(isCodexSeatbeltSandbox
+        ? {
+            watch: {
+              useFsEvents: false,
+              usePolling: true,
+            },
+          }
+        : {}),
     },
+
     plugins: [
       vinext(),
-      sites({ mockAuth: !managedLinux }),
+
+      sites({
+        mockAuth: !managedLinux,
+      }),
+
       cloudflare({
-        viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
+        viteEnvironment: {
+          name: "rsc",
+          childEnvironments: ["ssr"],
+        },
         inspectorPort: false,
         config: localBindingConfig,
       }),
